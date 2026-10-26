@@ -30,13 +30,6 @@ jobs:
     # only the repo owner's issues/discussions render as posts, so events on
     # anyone else's issue or discussion (including PR comments) are a no-op;
     # editing or deleting a label already takes write access
-    if: >-
-      contains(fromJSON('["push","workflow_dispatch","label"]'), github.event_name) ||
-      (contains(fromJSON('["issues","issue_comment"]'), github.event_name) &&
-      !github.event.issue.pull_request &&
-      github.event.issue.user.login == github.repository_owner) ||
-      (contains(fromJSON('["discussion","discussion_comment"]'), github.event_name) &&
-      github.event.discussion.user.login == github.repository_owner)
     runs-on: ubuntu-latest
     permissions:
       contents: read
