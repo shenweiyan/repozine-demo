@@ -61,24 +61,77 @@
   line-height: 1.8;
 }
 
+/* the post body's element styles below are ported from imjiaoyuan.github.io's .content rules, with its
+   palette mapped onto this site's tokens so the dark theme keeps working */
+
+/* every block in a post body — paragraphs, headings, lists, quotes, code, tables, rules — sits exactly
+   0.4em below the previous block and none above it, so a post reads as one even sheet */
+.prose :is(p, pre, blockquote, table, ul, ol, h1, h2, h3, h4, h5, h6, hr) {
+  margin: 0 0 0.4em;
+  overflow-wrap: break-word; /* 允许在长单词内部断行 */
+  word-break: break-word;    /* 兼容性更好的备选，但标准推荐用 overflow-wrap */
+}
+
 .prose h1 {
-  margin-top: 2em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--color-rule);
   font-size: 1.5em;
   font-weight: 700;
   line-height: 1.3;
 }
 
 .prose h2 {
-  margin-top: 1.75em;
-  font-size: 1.2em;
+  font-size: 1.3em;
   font-weight: 600;
 }
 
-.prose > :first-child,
-.prose :is(hr, h2, h3, h4) + * {
-  margin-top: 0;
+.prose h3 {
+  font-size: 1.12em;
+  font-weight: 600;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* the typography plugin makes quotes italic, muted, with decorative quotation marks; the ported style is a
+   plain left rule with body-color text, so undo all three */
+.prose blockquote {
+  padding-left: 1em;
+  border-left: 0.25em solid var(--color-fg);
+  color: var(--color-fg);
+  font-weight: 400;
+  font-style: normal;
+}
+
+.prose blockquote p:first-of-type::before,
+.prose blockquote p:last-of-type::after {
+  content: none;
+}
+
+/* a bordered, horizontally scrollable table with a visible grid; the plugin's section borders are recolored
+   to match the cell borders, since border-collapse would otherwise mix the two colors */
+.prose table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--color-fg);
+  padding: 0.3em 0.6em;
+}
+
+.prose thead,
+.prose tbody tr,
+.prose tfoot {
+  border-color: var(--color-fg);
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--color-fg);
+  height: 0;
 }
 
 .prose a {
@@ -214,24 +267,35 @@ mark {
   }
 }
 
+/* code blocks and inline code both step down to 0.95em */
+.prose pre,
+.prose code {
+  font-size: 0.95em;
+}
+
+/* inline code is a small bordered chip on the surface */
 .prose :not(pre) > code {
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
+  padding: 0.1em 0.3em;
   background: var(--color-surface);
+  border: 1px solid var(--color-rule);
+  border-radius: 4px;
   font-weight: 400;
 }
 
+/* a code block is a bordered box on the surface, with a little padding and horizontal scroll */
 .prose pre {
+  padding: 0.8em 1em;
+  overflow-x: auto;
+  background: var(--color-surface);
   border: 1px solid var(--color-rule);
   border-radius: 8px;
 }
 
-/* CopyCode.astro puts its button in the box that rehypeWrapCodeBlocks puts around each pre. The box takes over the
-   pre's margins (the typography plugin's 1.7142857em, at the pre's 0.875em font size), so the button's corner is the
-   pre's; in :where() so the rule that removes the space after a heading still wins */
-.prose :where(.code-block) {
+/* CopyCode.astro puts its button in the box that rehypeWrapCodeBlocks puts around each pre, so the box takes over
+   the pre's margin from the ported 0.4em rhythm and the button sits at the pre's corner */
+.prose .code-block {
   position: relative;
-  margin-block: 1.5em;
+  margin: 0 0 0.4em;
 }
 
 .prose .code-block > pre {
