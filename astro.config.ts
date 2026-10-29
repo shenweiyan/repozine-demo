@@ -29,7 +29,7 @@ const { site, base } = siteLocationFor(
 
 export default defineConfig({
   site,
-  base,
+  // base,
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
