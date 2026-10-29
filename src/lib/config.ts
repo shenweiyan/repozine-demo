@@ -5,7 +5,9 @@ export type SiteConfig = {
   repoOwner: string;
   repoName: string;
   source: "issues" | "discussions";
-  discussionCategory?: string;
+  // the discussion category slugs to publish from; config.json takes one slug or a list. Empty when every category is
+  // published, and in issues mode
+  discussionCategories: string[];
   googleAnalyticsId: string;
   // BCP 47 tag for <html lang>, dates, the giscus interface and the web font's Hangul faces (ko); one with a region (ko-KR) also sets og:locale
   language: string;
@@ -58,9 +60,22 @@ export const parseSiteConfig = (
       `config.json: "source" must be "issues" or "discussions", got ${JSON.stringify(source)}`,
     );
   }
-  if (source === "discussions" && !isNonEmptyString(discussionCategory)) {
+  // issues mode ignores the key, as it may be left over from the template
+  const discussionCategories =
+    source === "issues" || discussionCategory === undefined
+      ? []
+      : Array.isArray(discussionCategory)
+        ? discussionCategory
+        : [discussionCategory];
+  // an empty list would read as publishing nothing, but means every category, as leaving the key out does
+  if (
+    !discussionCategories.every(isNonEmptyString) ||
+    (source === "discussions" &&
+      Array.isArray(discussionCategory) &&
+      discussionCategory.length === 0)
+  ) {
     throw new Error(
-      `config.json: "discussionCategory" is required when "source" is "discussions"`,
+      `config.json: "discussionCategory" must be a category slug or a list of them, or left out to publish every category; got ${JSON.stringify(discussionCategory)}`,
     );
   }
   if (typeof googleAnalyticsId !== "string") {
@@ -81,9 +96,7 @@ export const parseSiteConfig = (
     repoOwner,
     repoName,
     source,
-    discussionCategory: isNonEmptyString(discussionCategory)
-      ? discussionCategory
-      : undefined,
+    discussionCategories,
     googleAnalyticsId,
     language,
   };

@@ -1,5 +1,5 @@
 import type { SiteConfig } from "./config";
-import type { Label, PostNode } from "./github";
+import type { DiscussionCategory, Label, PostNode } from "./github";
 
 export type Post = {
   number: number;
@@ -12,13 +12,15 @@ export type Post = {
   commentCount: number;
   // when the post's body was last edited (GitHub doesn't count title or label changes), for sitemaps and article metadata
   updatedAt: string;
+  // the discussion's category, which giscus is given; null for an issue
+  category: DiscussionCategory | null;
 };
 
 export type TrustedPostNode = PostNode & { author: { login: string } };
 
 type TrustConfig = Pick<
   SiteConfig,
-  "repoOwner" | "repoName" | "source" | "discussionCategory"
+  "repoOwner" | "repoName" | "source" | "discussionCategories"
 >;
 
 const equalsIgnoringCase = (a: string, b: string): boolean =>
@@ -46,7 +48,8 @@ export const isTrustedPost = (
     node.__typename === "Discussion" &&
     node.closed === false &&
     node.category !== undefined &&
-    node.category.slug === config.discussionCategory
+    (config.discussionCategories.length === 0 ||
+      config.discussionCategories.includes(node.category.slug))
   );
 };
 
@@ -60,9 +63,16 @@ export const toPost = (node: TrustedPostNode): Post => ({
   tags: node.labels.nodes,
   commentCount: node.comments.totalCount,
   updatedAt: node.lastEditedAt ?? node.createdAt,
+  category: node.category ?? null,
 });
 
 export const byNewest = (
   a: Pick<Post, "createdAt">,
   b: Pick<Post, "createdAt">,
 ): number => Date.parse(b.createdAt) - Date.parse(a.createdAt);
+
+// the home page lists pinned posts first; every other list stays in date order
+export const byPinnedThenNewest = (
+  a: { pinned: boolean; createdAt: string },
+  b: { pinned: boolean; createdAt: string },
+): number => Number(b.pinned) - Number(a.pinned) || byNewest(a, b);

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  fetchDiscussionCategory,
+  fetchDiscussionCategories,
   fetchDiscussions,
   fetchIssues,
+  fetchPinnedNumbers,
   fetchProfile,
   fetchRepositoryDescription,
   githubGraphql,
@@ -217,52 +218,57 @@ describe("fetchIssues", () => {
   });
 });
 
-describe("fetchDiscussionCategory", () => {
-  const categories = (
-    nodes: { id: string; name: string; slug: string }[],
-    hasDiscussionsEnabled = true,
-  ) =>
+describe("fetchDiscussionCategories", () => {
+  const categories = (slugs: string[], hasDiscussionsEnabled = true) =>
     json({
       data: {
         repository: {
           id: "R_1",
           hasDiscussionsEnabled,
-          discussionCategories: { nodes },
+          discussionCategories: {
+            nodes: slugs.map((slug) => ({ id: `DIC_${slug}`, slug })),
+          },
         },
       },
     });
 
-  it("finds the category by its slug", async () => {
-    fetchMock.mockResolvedValue(
-      categories([
-        { id: "DIC_1", name: "General", slug: "general" },
-        { id: "DIC_2", name: "Posts", slug: "posts" },
-      ]),
-    );
+  it("returns the repository id and the ids of the listed categories", async () => {
+    fetchMock.mockResolvedValue(categories(["general", "posts", "notes"]));
 
     await expect(
-      fetchDiscussionCategory("zeikar", "repozine", "posts"),
+      fetchDiscussionCategories("zeikar", "repozine", ["notes", "posts"]),
     ).resolves.toEqual({
       repoId: "R_1",
-      category: { id: "DIC_2", name: "Posts", slug: "posts" },
+      categoryIds: ["DIC_posts", "DIC_notes"],
     });
   });
 
-  it("lists the available slugs when the configured one is missing", async () => {
-    fetchMock.mockResolvedValue(
-      categories([{ id: "DIC_1", name: "General", slug: "general" }]),
-    );
+  // a slug listed twice would otherwise publish its posts twice
+  it("returns each category once", async () => {
+    fetchMock.mockResolvedValue(categories(["posts"]));
 
     await expect(
-      fetchDiscussionCategory("zeikar", "repozine", "Posts"),
-    ).rejects.toThrow(/"Posts".*available slugs: general/);
+      fetchDiscussionCategories("zeikar", "repozine", ["posts", "posts"]),
+    ).resolves.toMatchObject({ categoryIds: ["DIC_posts"] });
+  });
+
+  it("names the missing slugs and lists the available ones", async () => {
+    fetchMock.mockResolvedValue(categories(["general", "posts"]));
+
+    await expect(
+      fetchDiscussionCategories("zeikar", "repozine", [
+        "Posts",
+        "posts",
+        "notes",
+      ]),
+    ).rejects.toThrow(/"Posts", "notes"; available slugs: general, posts/);
   });
 
   it("says so when the repository has no categories", async () => {
     fetchMock.mockResolvedValue(categories([]));
 
     await expect(
-      fetchDiscussionCategory("zeikar", "repozine", "posts"),
+      fetchDiscussionCategories("zeikar", "repozine", ["posts"]),
     ).rejects.toThrow(/available slugs: none/);
   });
 
@@ -271,7 +277,7 @@ describe("fetchDiscussionCategory", () => {
     fetchMock.mockResolvedValue(categories([], false));
 
     await expect(
-      fetchDiscussionCategory("someone", "blog", "posts"),
+      fetchDiscussionCategories("someone", "blog", ["posts"]),
     ).rejects.toThrow(
       /Discussions are turned off in someone\/blog.*Settings.*"source": "issues"/,
     );
@@ -333,6 +339,48 @@ describe("fetchDiscussions", () => {
       categoryId: "DIC_2",
       cursor: "cursor-1",
     });
+  });
+
+  it("lists every category's discussions for a null category", async () => {
+    fetchMock.mockResolvedValue(issuesPage([node(1)], null));
+
+    await fetchDiscussions("zeikar", "repozine", null);
+
+    expect(variablesOf(0)).toMatchObject({ categoryId: null });
+  });
+
+  // the default order is by last update, which moves a discussion updated between two page requests
+  it("pages in creation order", async () => {
+    fetchMock.mockResolvedValue(issuesPage([node(1)], null));
+
+    await fetchDiscussions("zeikar", "repozine", "DIC_2");
+
+    expect(JSON.parse(String(initOf(0)?.body)).query).toContain(
+      "orderBy: { field: CREATED_AT, direction: ASC }",
+    );
+  });
+});
+
+describe("fetchPinnedNumbers", () => {
+  it.each([
+    ["issues", "pinnedIssues"],
+    ["discussions", "pinnedDiscussions"],
+  ] as const)("reads the pinned %s", async (source, connection) => {
+    fetchMock.mockResolvedValue(
+      json({
+        data: {
+          repository: {
+            pins: { nodes: [{ post: { number: 3 } }, { post: { number: 9 } }] },
+          },
+        },
+      }),
+    );
+
+    const pinned = await fetchPinnedNumbers("zeikar", "repozine", source);
+
+    expect([...pinned]).toEqual([3, 9]);
+    expect(JSON.parse(String(initOf(0)?.body)).query).toContain(connection);
+    expect(variablesOf(0)).toEqual({ owner: "zeikar", repo: "repozine" });
   });
 });
 
