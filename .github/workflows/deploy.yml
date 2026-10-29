@@ -1,21 +1,10 @@
-name: Deploy to GitHub Pages
+name: Deploy Repozine to GitHub Pages
 
 on:
   # main is this repo's default branch; repozine lets downstream repos push
   # template updates straight to their tracked branch and have it deploy.
   push:
-    branches: [main, repozine]
-  issues:
-    types: [opened, edited, deleted, closed, reopened, labeled, unlabeled, transferred]
-  # comment counts are rendered at build time, so new/removed comments must
-  # trigger a rebuild; pull-request comments are filtered out in the job below
-  discussion:
-    types: [created, edited, deleted, transferred, category_changed, labeled, unlabeled]
-  discussion_comment:
-    types: [created, deleted]
-  # a renamed label moves its tag page, and a recolored or deleted one changes every post it's on
-  label:
-    types: [edited, deleted]
+    branches: [main]
   workflow_dispatch:
   # issue and discussion events only run workflows from the default branch, so a repo that keeps Repozine on its
   # repozine branch calls this file there from a short workflow on its default branch (see the README)
@@ -26,10 +15,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 新增：独立检查作业，判断过去 24 小时内是否有 Discussions 变动
+  check-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      discussions: read
+    outputs:
+      has_changes: ${{ steps.check_discussions.outputs.has_changes }}
+    steps:
+      - name: Check Discussions Changes
+        id: check_discussions
+        run: |
+          YESTERDAY=$(date -d "24 hours ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "Checking discussions updated since: $YESTERDAY"
+
+          RECENT_DISCUSSIONS=$(gh api /repos/${{ github.repository }}/discussions --paginate -q ".[] | select(.updated_at > \"$YESTERDAY\")")
+
+          if [ -n "$RECENT_DISCUSSIONS" ]; then
+            echo "Discussion changes detected."
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "No discussion changes in the last 24 hours."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
   build:
-    # only the repo owner's issues/discussions render as posts, so events on
-    # anyone else's issue or discussion (including PR comments) are a no-op;
-    # editing or deleting a label already takes write access
+    # 依赖检查作业，在当前运行的分支是 repozine 分支，或存在变动时执行
+    needs: check-changes
+    if: github.ref == 'refs/heads/main' || needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,14 +75,14 @@ jobs:
       - name: Check
         run: npm run check
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       # the site's real address, custom domain included: its origin for absolute URLs and its path as the base
       - id: pages
         uses: actions/configure-pages@v6
       - name: Build
         run: npm run build
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           SITE_URL: ${{ steps.pages.outputs.base_url }}
 
       - uses: actions/upload-pages-artifact@v5
